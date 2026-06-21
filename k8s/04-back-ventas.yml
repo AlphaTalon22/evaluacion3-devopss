@@ -1,0 +1,96 @@
+########################################
+# Deployment back-ventas (puerto 8080)
+########################################
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: back-ventas
+  namespace: eval2
+  labels:
+    app: back-ventas
+spec:
+  replicas: 2          # Alta disponibilidad: 2 réplicas
+  selector:
+    matchLabels:
+      app: back-ventas
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0   # Zero-downtime deploy
+  template:
+    metadata:
+      labels:
+        app: back-ventas
+    spec:
+      containers:
+        - name: back-ventas
+          # La imagen se actualiza automáticamente por el pipeline CI/CD
+          image: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/eval2-back-ventas:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: MYSQL_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: eval2-config
+                  key: MYSQL_DATABASE
+            - name: DB_USERNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: eval2-config
+                  key: DB_USERNAME
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: eval2-config
+                  key: DB_HOST
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: eval2-secret
+                  key: DB_PASSWORD
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: eval2-secret
+                  key: MYSQL_ROOT_PASSWORD
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 40
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 15
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+---
+########################################
+# Service back-ventas (solo interno)
+########################################
+apiVersion: v1
+kind: Service
+metadata:
+  name: back-ventas
+  namespace: eval2
+  labels:
+    app: back-ventas
+spec:
+  selector:
+    app: back-ventas
+  ports:
+    - port: 8080
+      targetPort: 8080
+  type: ClusterIP

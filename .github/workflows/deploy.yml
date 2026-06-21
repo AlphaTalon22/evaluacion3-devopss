@@ -1,0 +1,137 @@
+name: CD Deploy en AWS EKS
+
+on:
+  push:
+    branches:
+      - deploy
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  CLUSTER: eval2-cluster
+  PROJECT_NAME: eval2
+
+jobs:
+  deploy:
+    name: Build, Push y Deploy en EKS
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout del código
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      # 2. Configurar credenciales AWS
+      - name: Configurar credenciales AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 3. Login en ECR
+      - name: Login en ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 4. Obtener Account ID dinámicamente (no hace falta tenerlo como secret)
+      - name: Obtener AWS Account ID
+        run: |
+          echo "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_ENV
+
+      # 5. Definir URLs de los repositorios ECR
+      - name: Definir URLs de los ECR
+        run: |
+          echo "VENTAS_ECR=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT_NAME}-back-ventas" >> $GITHUB_ENV
+          echo "DESPACHOS_ECR=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT_NAME}-back-despachos" >> $GITHUB_ENV
+          echo "FRONTEND_ECR=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT_NAME}-frontend" >> $GITHUB_ENV
+
+      # 6. Build y Push back-ventas
+      - name: Build y Push back-ventas
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            -t $VENTAS_ECR:${{ github.sha }} \
+            -t $VENTAS_ECR:latest \
+            ./back-Ventas_SpringBoot \
+            --load
+          docker push $VENTAS_ECR:${{ github.sha }}
+          docker push $VENTAS_ECR:latest
+
+      # 7. Build y Push back-despachos
+      - name: Build y Push back-despachos
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            -t $DESPACHOS_ECR:${{ github.sha }} \
+            -t $DESPACHOS_ECR:latest \
+            ./back-Despachos_SpringBoot \
+            --load
+          docker push $DESPACHOS_ECR:${{ github.sha }}
+          docker push $DESPACHOS_ECR:latest
+
+      # 8. Build y Push frontend
+      - name: Build y Push frontend
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            -t $FRONTEND_ECR:${{ github.sha }} \
+            -t $FRONTEND_ECR:latest \
+            ./front_despacho \
+            --load
+          docker push $FRONTEND_ECR:${{ github.sha }}
+          docker push $FRONTEND_ECR:latest
+
+      # 9. Instalar kubectl
+      - name: Instalar kubectl
+        uses: azure/setup-kubectl@v4
+
+      # 10. Conectar al cluster EKS
+      - name: Conectar al cluster EKS
+        run: |
+          aws eks update-kubeconfig \
+            --region $AWS_REGION \
+            --name $CLUSTER
+
+      # 11. Aplicar los manifiestos de Kubernetes (namespace, configmaps, services, deployments)
+      - name: Aplicar manifiestos Kubernetes
+        run: |
+          kubectl apply -f k8s/
+
+      # 12. Actualizar imagen del back-ventas en el deployment
+      - name: Actualizar imagen back-ventas
+        run: |
+          kubectl set image deployment/back-ventas \
+            back-ventas=$VENTAS_ECR:${{ github.sha }} \
+            -n eval2
+
+      # 13. Actualizar imagen del back-despachos en el deployment
+      - name: Actualizar imagen back-despachos
+        run: |
+          kubectl set image deployment/back-despachos \
+            back-despachos=$DESPACHOS_ECR:${{ github.sha }} \
+            -n eval2
+
+      # 14. Actualizar imagen del frontend en el deployment
+      - name: Actualizar imagen frontend
+        run: |
+          kubectl set image deployment/frontend \
+            frontend=$FRONTEND_ECR:${{ github.sha }} \
+            -n eval2
+
+      # 15. Esperar que los deployments estén listos (rollout)
+      - name: Esperar rollout back-ventas
+        run: kubectl rollout status deployment/back-ventas -n eval2
+
+      - name: Esperar rollout back-despachos
+        run: kubectl rollout status deployment/back-despachos -n eval2
+
+      - name: Esperar rollout frontend
+        run: kubectl rollout status deployment/frontend -n eval2
+
+      # 16. Mostrar la URL pública del frontend (LoadBalancer)
+      - name: Obtener URL pública del frontend
+        run: |
+          echo "URL del frontend:"
+          kubectl get service frontend -n eval2 \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'

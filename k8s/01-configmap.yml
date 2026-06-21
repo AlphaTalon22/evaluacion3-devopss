@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eval2-config
+  namespace: eval2
+data:
+  MYSQL_DATABASE: "eval2db"
+  DB_USERNAME: "root"
+  # El host dentro del cluster apunta al Service de MySQL
+  DB_HOST: "mysql"
