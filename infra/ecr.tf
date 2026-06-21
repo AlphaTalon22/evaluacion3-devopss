@@ -35,7 +35,7 @@ resource "aws_ecr_lifecycle_policy" "cleanup" {
     rules = [
       {
         rulePriority = 1
-        description  = "Eliminar imágenes no etiquetadas con más de 1 día"
+        description  = "Eliminar imagenes no etiquetadas con mas de 1 dia"
         selection = {
           tagStatus   = "untagged"
           countType   = "sinceImagePushed"
@@ -48,7 +48,7 @@ resource "aws_ecr_lifecycle_policy" "cleanup" {
       },
       {
         rulePriority = 2
-        description  = "Conservar solo las últimas 10 imágenes etiquetadas"
+        description  = "Conservar solo las ultimas 10 imagenes etiquetadas"
         selection = {
           tagStatus     = "tagged"
           tagPrefixList = ["v", "sha-"]

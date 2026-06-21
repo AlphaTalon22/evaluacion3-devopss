@@ -6,7 +6,7 @@ resource "aws_security_group" "eks_cluster_sg" {
   description = "Security Group para el plano de control de EKS"
   vpc_id      = aws_vpc.main.id
 
-  # Permite tráfico HTTPS desde los nodos worker al API server de EKS
+  # Permite trafico HTTPS desde los nodos worker al API server de EKS
   ingress {
     description = "HTTPS desde nodos worker"
     from_port   = 443
@@ -15,9 +15,9 @@ resource "aws_security_group" "eks_cluster_sg" {
     cidr_blocks = [var.vpc_cidr]
   }
 
-  # Permite todo el tráfico saliente (para comunicación con nodos y AWS APIs)
+  # Permite todo el trafico saliente (para comunicacion con nodos y AWS APIs)
   egress {
-    description = "Todo el tráfico saliente permitido"
+    description = "Todo el trafico saliente permitido"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -38,18 +38,18 @@ resource "aws_security_group" "eks_nodes_sg" {
   description = "Security Group para los nodos worker de EKS"
   vpc_id      = aws_vpc.main.id
 
-  # Comunicación entre nodos (requerida por Kubernetes)
+  # Comunicacion entre nodos (requerida por Kubernetes)
   ingress {
-    description = "Comunicación entre nodos del clúster"
+    description = "Comunicacion entre nodos del cluster"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     self        = true
   }
 
-  # Tráfico desde el plano de control (kubelet, métricas, etc.)
+  # Trafico desde el plano de control (kubelet, metricas, etc.)
   ingress {
-    description     = "Tráfico del plano de control hacia los nodos"
+    description     = "Trafico del plano de control hacia los nodos"
     from_port       = 1025
     to_port         = 65535
     protocol        = "tcp"
@@ -74,9 +74,9 @@ resource "aws_security_group" "eks_nodes_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Permite todo el tráfico saliente (para ECR, S3, CloudWatch, etc.)
+  # Permite todo el trafico saliente (para ECR, S3, CloudWatch, etc.)
   egress {
-    description = "Todo el tráfico saliente permitido"
+    description = "Todo el trafico saliente permitido"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -86,7 +86,7 @@ resource "aws_security_group" "eks_nodes_sg" {
   tags = {
     Name    = "${var.project_name}-eks-nodes-sg"
     Project = var.project_name
-    # Requerido por EKS para asociar el SG automáticamente
+    # Requerido por EKS para asociar el SG automaticamente
     "kubernetes.io/cluster/${var.cluster_name}" = "owned"
   }
 }
